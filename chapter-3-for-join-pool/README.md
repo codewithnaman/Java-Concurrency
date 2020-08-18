@@ -129,5 +129,76 @@ A can complete its task depending on the result returned by B,C,D.
 In ForkJoinPool only those thread sent to waiting state which are waiting for other threads to complete; not those
 thread which are waiting for the IO, Network response or other resource to free.
 
+### ForkJoinPool Creation
 Before we go in detail how the ForkJoinPool solves our problem; lets understand how to create and submit a task to 
 ForkJoinPool.
+
+To create a ForkJoinPool we can get a common pool using below line:
+```text
+      ForkJoinPool pool = ForkJoinPool.commonPool();
+      System.out.println(pool);
+```
+If we see output of the above it looks like below:
+```text
+java.util.concurrent.ForkJoinPool@1540e19d[Running, parallelism = 15, size = 0, active = 0, running = 0, steals = 0, tasks = 0, submissions = 0]
+```
+Where parallelism 15 shows that it can run 15 threads in parallel. When we use commonpool method to get ForkJoinPool it 
+gives by default n-1 thread ForkJoinPool where n is number of logical cores available on the machine. Like on which 
+machine example run have 16 cores, so it creates the 15 thread pool.
+
+We can submit runnable task to pool like below:
+```text
+    pool.submit(() -> task(index));
+```
+
+The above pool is of the ForkJoinPool is common pool which has fixed size depending on the number of logical cores 
+available on system. If we need custom size ForkJoinPool then we can create like below, with size of pool which we
+require:
+```text
+        ForkJoinPool pool = new ForkJoinPool(); //Create pool with n thread; n is number of logical cores
+        ForkJoinPool pool = new ForkJoinPool(100); // Create pool with 100 threads 
+```
+
+There are differences between the task submission to pool depending on task submitter is outside the pool thread;
+or task is submitted within the pool i.e. thread running within the pool itself and submit task. There are different
+methods to submit the tasks to pool depending on the use case.
+
+### ForkJoinPool and Runnable or asynchronous task
+Let's see how many ways we can submit the runnable or asynchronously task to ForkJoinPool:
+```text
+        ForkJoinPool pool = ForkJoinPool.commonPool();
+        System.out.println("Sending task");
+        pool.execute(()->task());
+        pool.execute(ForkJoinPoolRunnableDifferentMethods::task);
+        ForkJoinTask task = ForkJoinTask.adapt(ForkJoinPoolRunnableDifferentMethods::task);
+        pool.execute(task);
+        System.out.println("Done");
+        pool.awaitTermination(10, TimeUnit.SECONDS);
+```
+In above example we can submit the task using execute method. We can provide Runnable implementation, lambda for the 
+Runnable or method reference. We can also submit the ForkJoinTask of Runnable to pool. The ForkJoinTask of Runnable can
+be created using the ForkJoinTask adapt method.
+
+ForkJoinTask can be forked to submit the task from itself to pool and then join at the end of execution; which we will 
+look in upcoming next sections. ForkJoinTask is an abstract class, and it implements the Future; The implementation for
+this class is RecursiveAction and RecursiveTask; which usage we will see in upcoming sections.
+
+ForkJoinPool execute has return type void; it means it is for those task for which we want to run asynchronously and 
+not interested in result after completion of task.
+
+### ForkJoinPool and Callable
+If we are interested in the result returned by a task after it completes its execution. For this kind of tasks we use 
+Callable in ExecutorService. Let's see how we can accommodate this within ForkJoinPool.
+
+We will submit a Callable task to ForkJoinPool using invoke; but invoke just take the ForkJoinTask not the Callable 
+implementation as argument. But, we can convert a Callable task easily into the ForkJoinTask using adapt method of 
+ForkJoinTask which takes callable as the argument and creates ForkJoinTask. 
+```text
+        System.out.println("Start");
+        ForkJoinPool pool = ForkJoinPool.commonPool();
+        ForkJoinTask<Integer> task = ForkJoinTask.adapt(ForkJoinPoolWithCallable::compute);
+        Integer result = pool.invoke(task);
+        System.out.println("Done " + result);
+        pool.awaitTermination(10, TimeUnit.SECONDS);
+```
+ 
