@@ -5,7 +5,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.TimeUnit;
 
-public class ForkJoinPoolWithCallable {
+public class ForkJoinPoolWithCallableSynchronous {
 
     public static int compute() {
         System.out.println("Starting compute in Thread : " + Thread.currentThread());
@@ -21,7 +21,7 @@ public class ForkJoinPoolWithCallable {
     public static void main(String[] args) throws InterruptedException {
         System.out.println("Start");
         ForkJoinPool pool = ForkJoinPool.commonPool();
-        ForkJoinTask<Integer> task = ForkJoinTask.adapt(ForkJoinPoolWithCallable::compute);
+        ForkJoinTask<Integer> task = ForkJoinTask.adapt(ForkJoinPoolWithCallableSynchronous::compute);
         Integer result = pool.invoke(task);
         System.out.println("Done " + result);
         pool.awaitTermination(10, TimeUnit.SECONDS);

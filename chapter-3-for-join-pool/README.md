@@ -201,4 +201,187 @@ ForkJoinTask which takes callable as the argument and creates ForkJoinTask.
         System.out.println("Done " + result);
         pool.awaitTermination(10, TimeUnit.SECONDS);
 ```
- 
+
+Above call is synchronous call; i.e. the task is running in a different thread but waiting for completing the thread and
+getting the result. While we generally look for that task execute asynchronously to take advantage of the 
+multi-threading and once task will be completed then we get the result from it. So, when we should use invoke method; 
+invoke method is useful when we need to perform the complex task which can be solved using divide and conquer approach,
+and you need result immediately after completion of result then we use invoke method.
+
+So what we need to do if we need to put the task as asynchronous and perform some other task in between and get result
+when required. For that ForkJoinPool provides submit method which takes a Callable or ForkJoinTask and returns
+a ForkJoinTask; Since ForkJoinTask implements Future; It will return result once task execution completes. Let's see
+Example of submit:
+```text
+ System.out.println("Start");
+        ForkJoinPool pool = ForkJoinPool.commonPool();
+        ForkJoinTask<Integer> result = pool.submit(ForkJoinPoolWithCallableAsynchronous::compute);
+        System.out.println("Doing some other work");
+        Thread.sleep(2000);
+        System.out.println("Other Work Done");
+        System.out.println("First task Done " + result.get());
+
+        ForkJoinTask<Integer> task = ForkJoinTask.adapt(ForkJoinPoolWithCallableAsynchronous::compute);
+        ForkJoinTask<Integer> result2 = pool.submit(task);
+        System.out.println("Doing some other work");
+        Thread.sleep(2000);
+        System.out.println("Other Work Done");
+        System.out.println("Second task Done " + result2.get());
+        pool.awaitTermination(10, TimeUnit.SECONDS);
+```
+In above snippet we submit the task to ForkJoinPool and then started other work; once we completed the other work and 
+need the result of the task we submitted to ForkJoinPool then we can call get method to get the result.
+
+Till this section we have seen we have 3 methods to submit a task to ForkJoinPool from outside or main thread:
+1. execute - Takes Runnable or ForkJoinTask and does not return any result 
+[ForkJoinPoolWithRunnable](src/main/java/com/cwn/problem/ForkJoinPoolWithRunnable.java)
+[ForkJoinPoolRunnableDifferentMethods](src/main/java/com/cwn/problem/ForkJoinPoolRunnableDifferentMethods.java)
+2. invoke - Takes ForkJoinTask and perform the operation and return result synchronously 
+[ForkJoinPoolWithCallableSynchronous](src/main/java/com/cwn/problem/ForkJoinPoolWithCallableSynchronous.java)
+3. submit - Takes Callable or ForkJoinTask and return the ForkJoinTask which we can use to get the result at later time
+when we need the result of task. This is used to get result asynchronously. 
+[ForkJoinPoolWithCallableAsynchronous](src/main/java/com/cwn/problem/ForkJoinPoolWithCallableAsynchronous.java)
+
+## ForkJoinPool for dividing the problem when task is running insider pool
+Let's see how we can submit a task when task is inside or already running within the ForkJoinPool. For running a task
+from inside the pool we take an example; in which we will half the number till it is less than or equal to one 
+and when is less than or equal to one we will return 1; and sum up with same number. For this we will divide the task 
+into two different task. Let's first write it without ForkJoinPool; and then we will convert into the task and see how
+we can submit task to ForkThreadPool.
+```text
+ public static int divideAndConquerProblem(int number) {
+        System.out.println("Number "+number+" is Processing by Thread "+Thread.currentThread());
+        if (number <= 1) {
+            return 1;
+        } else {
+            int subtaskNumber = number / 2;
+            int result1 = divideAndConquerProblem(subtaskNumber);
+            int result2 = divideAndConquerProblem(subtaskNumber);
+            return result1 + result2;
+        }
+}
+ public static void main(String[] args) throws InterruptedException {
+      System.out.println(divideAndConquerProblem(3)); // 2
+      System.out.println(divideAndConquerProblem(6)); // 4
+      System.out.println(divideAndConquerProblem(20)); //16
+```
+Above code will run in main thread only in synchronous way and generate the result like below for number 6.
+```text
+Number 6 is Processing by Thread Thread[main,5,main]
+Number 3 is Processing by Thread Thread[main,5,main]
+Number 1 is Processing by Thread Thread[main,5,main]
+Number 1 is Processing by Thread Thread[main,5,main]
+Number 3 is Processing by Thread Thread[main,5,main]
+Number 1 is Processing by Thread Thread[main,5,main]
+Number 1 is Processing by Thread Thread[main,5,main]
+4
+```
+Number 6 task is divided into two sub-task of 3 and 3, and they process again for 1 and 1 then
+we get the result for them sum up and return to parent call, and we find our output for this 4.
+
+Let's do same thing by using ForkJoinPool and ForkJoinTask.
+```text
+    public static int divideAndConquerProblem(int number) {
+        System.out.println("Number "+number+" is Processing by Thread "+Thread.currentThread());
+        if (number <= 1) {
+            return 1;
+        } else {
+            int subtaskNumber = number / 2;
+            ForkJoinTask<Integer> task1 = ForkJoinTask.adapt(() -> divideAndConquerProblem(subtaskNumber));
+            ForkJoinTask<Integer> task2 = ForkJoinTask.adapt(() -> divideAndConquerProblem(subtaskNumber));
+            int result1 = task1.invoke();
+            int result2 = task2.invoke();
+            return result1 + result2;
+        }
+    }
+    public static void main(String[] args) throws InterruptedException {
+            ForkJoinPool pool = ForkJoinPool.commonPool();
+            pool.submit(()-> System.out.println(divideAndConquerProblem(6)));
+            pool.shutdown();
+            pool.awaitTermination(10, TimeUnit.SECONDS);
+    }
+``` 
+Here when we divide the task into 2 tasks we submit the task to pool using invoke method which will return us the 
+result. Invoke call work in synchronous way, so it will wait for thread 1 to finished; then it will submit another task. 
+Below is output for above program:
+```text
+Number 6 is Processing by Thread Thread[ForkJoinPool.commonPool-worker-9,5,main]
+Number 3 is Processing by Thread Thread[ForkJoinPool.commonPool-worker-9,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool.commonPool-worker-9,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool.commonPool-worker-9,5,main]
+Number 3 is Processing by Thread Thread[ForkJoinPool.commonPool-worker-9,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool.commonPool-worker-9,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool.commonPool-worker-9,5,main]
+4
+```
+We can see the task has executed in the pool and when task for 6 is gone into waiting; same thread steals the work for 
+task 3, and we can also see that it is process sequentially for result1 then result 2; But What if want to execute the 
+tasks asynchronous manner.
+
+To perform the same task in asynchronous manner we are going to fork and join method. fork method return the 
+ForkJoinTask; for method submits the task to pool and execute the further instructions and, we can get the result 
+after task completed using join method or join will wait for task to complete and move ahead. Lets see this with code.
+```text
+    public static int divideAndConquerProblem(int number) {
+        System.out.println("Number "+number+" is Processing by Thread "+Thread.currentThread());
+        if (number <= 1) {
+            return 1;
+        } else {
+            int subtaskNumber = number / 2;
+
+            ForkJoinTask<Integer> task1 = ForkJoinTask.adapt(() -> divideAndConquerProblem(subtaskNumber));
+            ForkJoinTask<Integer> task2 = ForkJoinTask.adapt(() -> divideAndConquerProblem(subtaskNumber));
+
+            ForkJoinTask<Integer> result1 = task1.fork();
+            ForkJoinTask<Integer> result2 = task2.fork();
+            return result1.join() + result2.join();
+        }
+
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        ForkJoinPool pool = new ForkJoinPool(50);
+        pool.submit(()-> System.out.println(divideAndConquerProblem(6)));
+        pool.shutdown();
+        pool.awaitTermination(10, TimeUnit.SECONDS);
+    }
+```
+Here task1.fork() will submit the task to pool and then task2.fork() will submit task to pool, and they run in parallel 
+then we are joining the result of the these two task when they complete and return the result. Let's see output of above
+program.
+```text
+Number 6 is Processing by Thread Thread[ForkJoinPool-1-worker-57,5,main]
+Number 3 is Processing by Thread Thread[ForkJoinPool-1-worker-43,5,main]
+Number 3 is Processing by Thread Thread[ForkJoinPool-1-worker-50,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool-1-worker-57,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool-1-worker-57,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool-1-worker-29,5,main]
+Number 1 is Processing by Thread Thread[ForkJoinPool-1-worker-36,5,main]
+4
+```
+We can see in above output that Number 3 tasks run in parallel and different threads. 
+
+## RecursiveAction and RecursiveTask
+Let's understand first why we need RecursiveAction or RecursiveTask; as we are working with ForkJoinPool and able
+to divide the task outside the pool as well as inside the pool. Consider the scenarios where you have to divide the task
+which need some data to process, and you use class methods to perform the operation; So like Runnable and Callable
+we need RecursiveAction and RecursiveTask to extend at class level; which will help to divide the task within the
+ForkJoinPool. Both Class have one abstract method compute. RecursiveAction does not return any result like Runnable 
+while RecursiveTask return the result after completing of operation. Let's see an example of Both.
+1. RecursiveAction [ForkJoinPoolRecursiveAction](src/main/java/com/cwn/problem/ForkJoinPoolRecursiveAction.java)
+2. RecursiveTask [ForkJoinPoolRecursiveTask](src/main/java/com/cwn/problem/ForkJoinPoolRecursiveTask.java)
+
+In RecursiveAction we divided the problem and submit using invokeAll method; and in RecursiveTask we fork the task
+and join for the result at the end.
+
+## Let's solve our original problem
+We had started with problem with Executor service and count the prime number in range 
+[ExecutorServiceInducedDeadLock](src/main/java/com/cwn/problem/ExecutorServiceInducedDeadLock.java).
+Lets solve it using the ForkJoinPool and concept we have learned till now.
+
+First we replace the ExecutorService with the ForkJoinPool and create ForkJoinPool in main method. The next action is 
+invoke the task for splitAndCompute. Then we will create task in splitAndCompute for splitAndCompute and fork them 
+from the task and join. Here is solution after change 
+[ExecutorServiceInducedDeadLockSolvedUsingForkJoinPool](src/main/java/com/cwn/problem/ExecutorServiceInducedDeadLockSolvedUsingForkJoinPool.java).
+
+So this will solve the problem of Pool induced lock.
