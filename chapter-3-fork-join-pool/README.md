@@ -1,7 +1,18 @@
+# Table of Contents
+* [Executor service shortcoming](#why-we-need-fork-join-pool-problem-with-executor-pool)
+* [When to Use ForkJoin Pool](#when-to-use-fork-join-pool)
+* [ForkJoinPool](#forkjoin-pool)
+    * [Create ForkJoinPool](#forkjoinpool-creation)
+    * [Submit Runnable to ForkJoinPool](#forkjoinpool-and-runnable-or-asynchronous-task)
+    * [Submit Callable to ForkJoinPool](#forkjoinpool-and-callable)
+    * [Split task insider the pool](#forkjoinpool-for-dividing-the-problem-when-task-is-running-insider-pool)
+    * [RecursiveAction and RecursiveTask in Pool](#recursiveaction-and-recursivetask)
+    * [Solve problem discuss in Executor Service Section](#lets-solve-our-original-problem)
+    
 # Fork And Join Pool
 ## Why we need Fork Join Pool; Problem with Executor Pool 
 We have executor service in Java; with an executor we can submit a task to pool, and it will execute the task as the 
-pool have active slot. There are some situations where deadlock is induced due to these pools. Let's take an example where 
+pool have active slot. There are some situations where deadlock has induced due to these pools. Let's take an example where 
 logically there is no chance of deadlock but deadlock happen because of Executor pool, or I can say Executor pool induce
 the deadlock; and it becomes dependent with input and pool size. 
 
@@ -108,9 +119,9 @@ have same problem; so here we are not able to predict the pool size depending on
 
 This is not logical problem from code; this is something induced depending on the pool size and inputs. 
 
-### When we encounter the pool induced deadlock and need to choose for Fork And Join Pool
-These type of problems we see in the divide and conquer type of problems; which are recursive in nature; Where parent
-task has dependency on completion of the splatted task.
+## When to use Fork Join Pool
+These type of pool induced deadlock problems we see in the divide and conquer type of problems; which are recursive 
+in nature; Where parent task has dependency on completion of the splatted task.
 
 ## ForkJoin Pool
 ForkJoin pool solves our above problem by a concept called work stealing. Work stealing give a chance to run the task 

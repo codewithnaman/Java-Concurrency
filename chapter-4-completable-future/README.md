@@ -1,5 +1,25 @@
-# Completable Future
+# Table Of Contents
+* [Future and its shortcoming](#futuret-in-java-and-shortcoming-with-it)
+* [CompletableFuture](#completablefuture)
+    * [Running a task in different thread](#lets-see-how-to-submit-a-task-to-completablefuture-and-use-of-it)
+    * [thenAccept to get Result](#thenaccept-method-of-completablefuture)
+    * [thenAcceptAsync method](#thenacceptasync-method-of-completablefuture)
+    * [thenApply to transform result from CompletableFuture](#thenapply-or-thenapplyasync-method-of-completablefuture)
+    * [thenRun method](#thenrun-method-of-completablefuture)
+    * [Completing CompletableFuture from Code](#completed-method-of-completablefuture)
+    * [Cancelling CompletableFuture from Code](#cancelling-the-completablefuture)
+    * [Handling Exception or Failure in CompletableFuture](#handling-exception-and-failure-of-completablefuture)
+* [Working with Multiple CompletableFuture](#working-with-multiple-completablefuture)
+    * [thenCombine method to merge result](#thencombine-method)
+    * [Handling return type CompletableFuture from a Completable Future using thenCompose method](#thencompose-method)
+    * [acceptEither or applyToEither](#accepteither-and-applytoeither-method)
+    * [runAfterEither and runAfterBoth method](#runafter-methods) 
+    * [anyOfMethod](#anyof-method)
+    * [Handling timeout till Java 8](#timeout-in-case-of-multiple-completablefuture)
+    * [allOf method](#allof-method)
+* [Java 9 timeout improvement for CompletableFuture](#java-9-timeout-method)
 
+# Completable Future
 ## Future<T> in java and shortcoming with it
 Let's first talk about Future in Java and why we need Completable Future. Future helps to get the result after task 
 execution completed. To Create a task we submit it to executor pool which return us Future<T> for getting the results.
@@ -1070,6 +1090,72 @@ public static void main(String[] args) {
 ```
 So when all task will completed successfully then it prints "All Tasks are completed". If we change one task to JPY
 then it will fail; and if register the exceptionally clause then it will execute that block.
+
+### Java 9 timeout Method
+Till Java 8; CompletableFuture does not have any timeout method and, it waits for the CompletableFuture to complete or
+complete exceptionally. Let's take an example of Java 8 CompletableFuture first:
+```text
+    private static void java8CompletableFuture() {
+        CompletableFuture<Double> converterFuture =
+                CompletableFuture.supplyAsync(()-> converter.convertCurrency("USD","INR"));
+        converterFuture.thenAccept(System.out::println);
+        
+        CompletableFuture<Double> converterFutureJpy =
+                CompletableFuture.supplyAsync(()-> converter.convertCurrency("JPY","INR"));
+        converterFutureJpy.exceptionally(TimeOutExample::reportError).thenAccept(System.out::println);
+    }
+
+     public static double reportError(Throwable throwable){
+            System.out.println(throwable);
+            throw new RuntimeException(throwable.getMessage());
+      }
+
+  public static void main(String[] args) throws InterruptedException {
+        java8CompletableFuture();
+        sleep(5000);
+    }
+```
+
+The above code will generate below output:
+```text
+java.util.concurrent.CompletionException: java.lang.RuntimeException: JPY currency can't be converted
+73.45103179972938
+```
+
+And If main ends before the CompletableFuture completes then there will be no output. If we comment the sleep line in 
+main method, then there will be no output and, we don't even get any exception that CompletableFuture not completed
+within time. 
+
+In Java 9, In CompletableFuture they have added timeout method, so If any CompletableFuture didn't complete within the
+time provided, It will complete with a default value if we use completeOnTimeout, and with TimeoutException if we use
+orTimeout method of Java 9. Let's see an Example for both:
+```text
+    private static void java9CompletableFuture() {
+        CompletableFuture<Double> completeTimeout =
+                CompletableFuture.supplyAsync(()-> converter.convertCurrency("USD","INR"));
+        completeTimeout.thenAccept(System.out::println);
+        completeTimeout.completeOnTimeout(50.0,2, TimeUnit.SECONDS);
+
+        CompletableFuture<Double>  orTimeout=
+                CompletableFuture.supplyAsync(()-> converter.convertCurrency("USD","INR"));
+        orTimeout.exceptionally(TimeOutExample::reportError).thenAccept(System.out::println);
+        orTimeout.orTimeout(2, TimeUnit.SECONDS);
+
+        CompletableFuture<Double> converterFutureJpy =
+                CompletableFuture.supplyAsync(()-> converter.convertCurrency("JPY","INR"));
+        converterFutureJpy.exceptionally(TimeOutExample::reportError).thenAccept(System.out::println);
+    }
+```
+Above output will for above code will be below:
+```text
+50.0
+java.util.concurrent.TimeoutException
+java.util.concurrent.CompletionException: java.lang.RuntimeException: JPY currency can't be converted
+```
+Since the first one has not completed within the time and, we have given the default value 50.0; and that we get in the
+output. In Second one we have given if task not completes it will complete with an TimeoutException; And Third one will 
+the same as it is because we didn't have registered the timeout with this.
+
 
 
 
